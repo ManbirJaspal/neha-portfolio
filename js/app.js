@@ -105,8 +105,8 @@ $('#clients').innerHTML = [...CL, ...CL, ...CL, ...CL].map(c => `<span>${c}</spa
 /* ---------- skills graph ---------- */
 const GROUPS = [
   ['AI', ['Agentic commerce', 'Gen AI', 'Prompt engineering', 'Systems thinking'], 215],
-  ['Product', ['Product Design', 'Product Thinking', 'Consulting', 'Mentoring'], 325],
-  ['Craft', ['UX Design', 'UI Design', 'Visual Design', 'Interaction Design', 'Email Design', 'Ads Design', 'Marketing Design'], 38],
+  ['Product', ['Product Design', 'Product Thinking', 'Consulting', 'Mentoring'], 325, 298],
+  ['Craft', ['UX Design', 'UI Design', 'Visual Design', 'Interaction Design', 'Email Design', 'Ads Design', 'Marketing Design'], 38, 62],
   ['Research', ['Design Sprint', 'User Testing', 'UX Research'], 145],
 ];
 $('#skillsList').innerHTML = GROUPS.flatMap(g => g[1]).map(s => `<li>${s}</li>`).join('');
@@ -114,8 +114,8 @@ $('#skillsList').innerHTML = GROUPS.flatMap(g => g[1]).map(s => `<li>${s}</li>`)
   const box = $('#graph'), svg = $('#graphLines'), nodes = [], edges = [];
   const add = (label, cls, extra = {}) => { const el = document.createElement('div'); el.className = 'node ' + cls; el.innerHTML = label; box.appendChild(el); const n = { el, x: 0, y: 0, vx: 0, vy: 0, ax: 0, ay: 0, ...extra }; nodes.push(n); return n; };
   const me = add(`<img src="${src('QY1eoIt5hblXrP4kznTFHjNBjwg.png', 512)}" alt="">`, 'me');
-  GROUPS.forEach(([name, skills, ang], g) => {
-    const hub = add(name, 'hub', { ang, g }); hub.el.dataset.g = g; edges.push([me, hub, 1]);
+  GROUPS.forEach(([name, skills, ang, fan], g) => {
+    const hub = add(name, 'hub', { ang, g, fan }); hub.el.dataset.g = g; edges.push([me, hub, 1]);
     skills.forEach((s, j) => { const n = add(s, '', { hub, j, n: skills.length }); edges.push([hub, n, 0]); });
   });
   const lines = edges.map(([, , h]) => { const l = document.createElementNS('http://www.w3.org/2000/svg', 'line'); if (h) l.setAttribute('class', 'hub'); svg.appendChild(l); return l; });
@@ -129,7 +129,7 @@ $('#skillsList').innerHTML = GROUPS.flatMap(g => g[1]).map(s => `<li>${s}</li>`)
       if (n.ang !== undefined) { const a = narrow ? [238, 302, 58, 122][n.g] : n.ang; n.a = a; n.ax = cx + Math.cos(rad(a)) * W * (narrow ? .23 : .2); n.ay = cy + Math.sin(rad(a)) * H * (narrow ? .25 : .2); }
     });
     nodes.forEach(n => {
-      if (!n.hub) return; const spread = Math.min(narrow ? 44 : 40, (narrow ? 170 : 190) / n.n), a = n.hub.a + (n.j - (n.n - 1) / 2) * spread, far = n.j % 2 ? 1.5 : 1;
+      if (!n.hub) return; const spread = Math.min(narrow ? 44 : 40, (narrow ? 170 : 190) / n.n), a = (narrow || n.hub.fan === undefined ? n.hub.a : n.hub.fan) + (n.j - (n.n - 1) / 2) * spread, far = n.j % 2 ? 1.5 : 1;
       n.ax = n.hub.ax + Math.cos(rad(a)) * W * (narrow ? .2 : .155) * far; n.ay = n.hub.ay + Math.sin(rad(a)) * H * (narrow ? .13 : .2) * far;
     });
     if (!placed) { nodes.forEach(n => { n.x = cx + (Math.random() - .5) * 60; n.y = cy + (Math.random() - .5) * 60; }); placed = true; }
