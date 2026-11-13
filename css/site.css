@@ -67,7 +67,7 @@ body[data-view="case"] #prog,body[data-view="case"] #rail{display:none}
 .hero-title{font-size:min(10.3vw,23.5vh);line-height:.94;font-weight:480;letter-spacing:-.035em}
 .hero-title .ln{display:block;white-space:nowrap}
 .hero-title em{font-size:1.1em;letter-spacing:-.02em}
-#aHero{left:73%;top:45%}
+#aHero{left:76.5%;top:46%}
 .hero-foot{position:absolute;inset:auto var(--pad) 30px;display:grid;grid-template-columns:auto 1fr auto;gap:24px 48px;align-items:center;font-size:.92rem}
 .hero-now{display:inline-flex;align-items:center;gap:10px;font-weight:500}
 .pulse{width:9px;height:9px;border-radius:50%;background:var(--marigold);box-shadow:0 0 0 0 rgba(244,183,64,.6);animation:pulse 2.4s infinite}
@@ -396,7 +396,7 @@ body[data-view="case"] #prog,body[data-view="case"] #rail{display:none}
   .hero{justify-content:flex-start;padding-top:calc(var(--nav-h) + 9vh)}
   .hero-title{font-size:min(11.6vw,9vh);line-height:1}
   .hero-title .ln{white-space:normal}
-  #aHero{left:78%;top:40%}
+  #aHero{left:60%;top:64%}
   .hero-foot{grid-template-columns:1fr;gap:10px}
   .hero-focus{display:none}
   .statement{min-height:105svh}

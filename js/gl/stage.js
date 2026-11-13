@@ -1,6 +1,6 @@
 // The WebGL stage. One loop, one HDR render, a cheap post chain:
-//   backdrop (low-res) -> scene (HDR, no MSAA) -> bloom (quarter-res pyramid) -> tone map -> FXAA + grain
-// Internal resolution adapts to what the GPU can do so motion stays smooth.
+//   backdrop (low-res) -> scene (HDR, multisampled) -> bloom (quarter-size pyramid) -> tone map + grain, straight to the canvas
+// The canvas is drawn at a working resolution that follows what the GPU can hold, so motion stays smooth.
 import * as THREE from 'three';
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
 
@@ -56,33 +56,16 @@ void main(){ vec3 c=texture2D(tMap,vUv).rgb*4.; c+=texture2D(tMap,vUv+uTexel*vec
 const UP = /* glsl */`precision highp float; varying vec2 vUv; uniform sampler2D tMap; uniform vec2 uTexel; uniform float uGain;
 void main(){ vec3 c=texture2D(tMap,vUv+uTexel*vec2(-2.,0.)).rgb+texture2D(tMap,vUv+uTexel*vec2(2.,0.)).rgb+texture2D(tMap,vUv+uTexel*vec2(0.,-2.)).rgb+texture2D(tMap,vUv+uTexel*vec2(0.,2.)).rgb;
   c+=2.*(texture2D(tMap,vUv+uTexel*vec2(-1.,1.)).rgb+texture2D(tMap,vUv+uTexel*vec2(1.,1.)).rgb+texture2D(tMap,vUv+uTexel*vec2(-1.,-1.)).rgb+texture2D(tMap,vUv+uTexel*vec2(1.,-1.)).rgb); gl_FragColor=vec4(c/12.*uGain,1.); }`;
-const COMPOSITE = /* glsl */`precision highp float; varying vec2 vUv; uniform sampler2D tScene,tBloom; uniform float uBloom,uCA,uExposure;
+const COMPOSITE = /* glsl */`precision highp float; varying vec2 vUv; uniform sampler2D tScene,tBloom; uniform float uBloom,uCA,uExposure,uTime,uGrain;
+float hash(vec2 p){vec3 p3=fract(vec3(p.xyx)*.1031);p3+=dot(p3,p3.yzx+33.33);return fract((p3.x+p3.y)*p3.z);}
 vec3 neutral(vec3 c){ float x=min(c.r,min(c.g,c.b)); float o=x<.08?x-6.25*x*x:.04; c-=o; float pk=max(c.r,max(c.g,c.b)); if(pk<.76) return c;
   float d=.24; float np=1.-d*d/(pk+d-.76); c*=np/pk; float g=1.-1./(.15*(pk-np)+1.); return mix(c,vec3(np),g); }
 void main(){
-  vec2 c=vUv-.5; float d=dot(c,c); vec2 off=c*d*.007*uCA;
+  vec2 c=vUv-.5; float d=dot(c,c); vec2 off=c*d*.006*uCA;
   vec3 col=vec3(texture2D(tScene,vUv+off).r,texture2D(tScene,vUv).g,texture2D(tScene,vUv-off).b);
   col+=texture2D(tBloom,vUv).rgb*uBloom;
   col*=uExposure*mix(1.,.6,smoothstep(.1,.62,d));
   col=neutral(col); col=pow(clamp(col,0.,1.),vec3(1./2.2));
-  gl_FragColor=vec4(col,dot(col,vec3(.299,.587,.114)));
-}`;
-const FXAA = /* glsl */`precision highp float; varying vec2 vUv; uniform sampler2D tMap; uniform vec2 uTexel; uniform float uTime,uGrain;
-float hash(vec2 p){vec3 p3=fract(vec3(p.xyx)*.1031);p3+=dot(p3,p3.yzx+33.33);return fract((p3.x+p3.y)*p3.z);}
-void main(){
-  vec4 m=texture2D(tMap,vUv); float lM=m.a;
-  float lNW=texture2D(tMap,vUv+uTexel*vec2(-1.,-1.)).a, lNE=texture2D(tMap,vUv+uTexel*vec2(1.,-1.)).a, lSW=texture2D(tMap,vUv+uTexel*vec2(-1.,1.)).a, lSE=texture2D(tMap,vUv+uTexel*vec2(1.,1.)).a;
-  float lMin=min(lM,min(min(lNW,lNE),min(lSW,lSE))), lMax=max(lM,max(max(lNW,lNE),max(lSW,lSE)));
-  vec3 col=m.rgb;
-  if(lMax-lMin>max(.03,lMax*.11)){
-    vec2 dir=vec2(-((lNW+lNE)-(lSW+lSE)),((lNW+lSW)-(lNE+lSE)));
-    float rd=1./(min(abs(dir.x),abs(dir.y))+max((lNW+lNE+lSW+lSE)*.03125,.0078125));
-    dir=clamp(dir*rd,-8.,8.)*uTexel;
-    vec3 a=.5*(texture2D(tMap,vUv+dir*(1./3.-.5)).rgb+texture2D(tMap,vUv+dir*(2./3.-.5)).rgb);
-    vec4 b4=.5*vec4(a,0.)+.25*(texture2D(tMap,vUv+dir*-.5)+texture2D(tMap,vUv+dir*.5));
-    float lb=dot(b4.rgb,vec3(.299,.587,.114));
-    col=(lb<lMin||lb>lMax)?a:b4.rgb;
-  }
   float g=hash(gl_FragCoord.xy+floor(uTime*24.)*17.13)-.5; col+=g*uGrain*(1.-.55*dot(col,vec3(.33)));
   gl_FragColor=vec4(col,1.);
 }`;
@@ -93,7 +76,7 @@ export function createStage(canvas, { onProgress } = {}) {
   if (!renderer.capabilities.isWebGL2) return null;
   const gl = renderer.getContext(), small = Math.min(innerWidth, innerHeight) < 700 || matchMedia('(pointer:coarse)').matches;
   renderer.toneMapping = THREE.NoToneMapping; renderer.setClearColor(0x020206, 1);
-  renderer.transmissionResolutionScale = .5;
+  renderer.transmissionResolutionScale = .6;
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(FOV, 1, .1, 60); camera.position.set(0, 0, CAM_Z);
@@ -119,52 +102,73 @@ export function createStage(canvas, { onProgress } = {}) {
   loading.onProgress = (u, l, t) => onProgress && onProgress(l / t);
   new HDRLoader(loading).load('assets/studio.hdr', tex => { tex.mapping = THREE.EquirectangularReflectionMapping; scene.environment = tex; });
 
-  // render targets
-  const mainRT = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, depthBuffer: true, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter });
-  const ldrRT = new THREE.WebGLRenderTarget(4, 4, { depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter });
+  // render targets: the scene in HDR with multisampling (type stays sharp, edges stay clean), bloom on a quarter-size pyramid
+  const mainRT = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, depthBuffer: true, samples: 4, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter });
   const bl = [0, 1, 2, 3].map(() => new THREE.WebGLRenderTarget(4, 4, half));
   const mBright = mk(BRIGHT, { tMap: { value: mainRT.texture }, uTexel: { value: new THREE.Vector2() }, uThreshold: { value: 1.0 } });
   const mDown = mk(DOWN, { tMap: { value: null }, uTexel: { value: new THREE.Vector2() } });
   const mUp = mk(UP, { tMap: { value: null }, uTexel: { value: new THREE.Vector2() }, uGain: { value: 1 } }, { blending: THREE.AdditiveBlending, transparent: true });
-  const mComp = mk(COMPOSITE, { tScene: { value: mainRT.texture }, tBloom: { value: bl[0].texture }, uBloom: { value: .5 }, uCA: { value: 1 }, uExposure: { value: 1 } });
-  const mFxaa = mk(FXAA, { tMap: { value: ldrRT.texture }, uTexel: { value: new THREE.Vector2() }, uTime: { value: 0 }, uGrain: { value: .036 } });
+  const mComp = mk(COMPOSITE, { tScene: { value: mainRT.texture }, tBloom: { value: bl[0].texture }, uBloom: { value: .5 }, uCA: { value: 1 }, uExposure: { value: 1 }, uTime: { value: 0 }, uGrain: { value: .034 } });
 
+  // resolution: the canvas itself is drawn at the working resolution, so every pass gets cheaper when it drops.
+  // It starts inside a pixel budget and then follows what this machine can hold (see pace()).
   const size = { w: 1, h: 1, vw: 1, vh: 1, unit: 1, pr: 1, scale: 1, narrow: false };
-  const PR = Math.min(devicePixelRatio || 1, 1.5), BUDGET = small ? 1.15e6 : 2.3e6;
-  let scale = 1, lastW = 0;
-  const cap = () => Math.min(1, Math.sqrt(BUDGET / (size.w * size.h * PR * PR)));
+  const PRMAX = Math.min(devicePixelRatio || 1, 2), PRMIN = Math.min(PRMAX, small ? 1.2 : 1.25), START = small ? 1.3e6 : 2.6e6, MOST = small ? 1.9e6 : 4.4e6;
+  let scale = 1, ceiling = 1, lastW = 0, dirty = false;
+  const fit = px => Math.min(1, Math.sqrt(px / (size.w * size.h * PRMAX * PRMAX))), lowest = () => Math.min(1, PRMIN / PRMAX);
+  renderer.setPixelRatio(1);
   function applyScale() {
-    const W = Math.max(2, Math.round(size.w * PR * scale)), H = Math.max(2, Math.round(size.h * PR * scale));
-    mainRT.setSize(W, H); ldrRT.setSize(W, H); bl.forEach((r, i) => r.setSize(Math.max(2, W >> (i + 2)), Math.max(2, H >> (i + 2))));
-    mBright.uniforms.uTexel.value.set(1 / W, 1 / H); mFxaa.uniforms.uTexel.value.set(1 / W, 1 / H); size.scale = scale; size.rw = W; size.rh = H;
+    const W = Math.max(2, Math.round(size.w * PRMAX * scale)), H = Math.max(2, Math.round(size.h * PRMAX * scale));
+    renderer.setSize(W, H, false); mainRT.setSize(W, H); bl.forEach((r, i) => r.setSize(Math.max(2, W >> (i + 2)), Math.max(2, H >> (i + 2))));
+    mBright.uniforms.uTexel.value.set(1 / W, 1 / H); size.pr = PRMAX * scale; size.rw = W; size.rh = H; dirty = false;
   }
   function resize() {
-    const w = canvas.clientWidth || innerWidth, h = canvas.clientHeight || innerHeight; size.w = w; size.h = h; size.narrow = w < 900; size.pr = PR;
-    renderer.setPixelRatio(PR); renderer.setSize(w, h, false);
+    const w = canvas.clientWidth || innerWidth, h = canvas.clientHeight || innerHeight; size.w = w; size.h = h; size.narrow = w < 900;
     camera.aspect = w / h; camera.updateProjectionMatrix();
     size.vh = 2 * CAM_Z * TAN; size.vw = size.vh * camera.aspect; size.unit = THREE.MathUtils.clamp(size.vw / 9.5, .5, 1.08);
     const bh = 2 * (CAM_Z + 9) * TAN * 1.12; backdrop.scale.set(bh * camera.aspect, bh, 1); bU.uAspect.value = camera.aspect;
-    if (w !== lastW) { scale = cap(); lastW = w; }
+    if (w !== lastW) { scale = Math.max(lowest(), fit(START)); ceiling = Math.max(scale, fit(MOST)); lastW = w; hold = Math.max(hold, 90); }
     applyScale();
   }
+  const listeners = []; let rzT = 0, hold = 150;
   resize();
-  const listeners = []; let rzT = 0;
   addEventListener('resize', () => { clearTimeout(rzT); rzT = setTimeout(() => { const w0 = size.w; resize(); listeners.forEach(f => f(size.w !== w0)); }, 120); });
 
   // pointer (on touch screens the scene sways gently by itself)
   const pointer = { x: 0, y: 0, sx: 0, sy: 0, touch: matchMedia('(pointer:coarse)').matches };
   addEventListener('pointermove', e => { if (e.pointerType === 'touch') return; pointer.touch = false; pointer.x = e.clientX / innerWidth * 2 - 1; pointer.y = -(e.clientY / innerHeight * 2 - 1); }, { passive: true });
 
-  // GPU timing where the browser allows it; used to pick a resolution the machine can hold
-  const tq = gl.getExtension('EXT_disjoint_timer_query_webgl2'); let query = null, pending = null, gpuMs = 0, hot = 0, cool = 0, dtAvg = 16, dtVar = 0;
+  // Pacing. A frame has to land inside the display's beat: when frames arrive late (or the GPU timer, where the browser
+  // has one, says a frame costs most of the beat) the resolution steps down; with steady headroom it steps back up, and a
+  // step up that does not hold is undone for good. Without a GPU timer a steady low rate could be a browser power cap,
+  // so it is probed once: drop the resolution, and if the rate does not recover, give the pixels back.
+  const tq = gl.getExtension('EXT_disjoint_timer_query_webgl2'); let query = null, pending = null, gpuMs = 0;
+  const dts = new Float32Array(48); let di = 0, calm = 0, trial = false, good = 1, probe = 0, capped = false, fps = 60;
+  const step = v => { scale = v; dirty = true; hold = 36; di = 0; calm = 0; };
+  function pace(ms) {
+    if (ms > 250) { hold = Math.max(hold, 24); return; }
+    if (hold > 0) { hold--; return; }
+    dts[di++] = ms; if (di < dts.length) return; di = 0;
+    const s = Array.from(dts).sort((a, b) => a - b), base = s[6], beat = Math.min(Math.max(base, 8.3), 16.8), lo = lowest(); let late = 0; for (const v of s) if (v > base * 1.6) late++;
+    const lateF = late / s.length, timed = !!tq && gpuMs > 0; fps = 1000 / s[24];
+    const slow = lateF > .2 || (timed && gpuMs > beat * .8), roomy = lateF < .05 && (!timed || gpuMs < beat * .42);
+    if (probe) { if (base < 21) { probe = 0; ceiling = scale; } else if (--probe === 0) { capped = true; step(good); } return; }
+    if (trial) { trial = false; if (slow) { ceiling = good; step(good); return; } }
+    if (slow) { if (scale > lo + .005) { ceiling = Math.max(lo, scale * .87); step(ceiling); } }
+    else if (!timed && !capped && base > 21 && scale > lo + .005) { good = scale; probe = 2; step(Math.max(lo, scale * .75)); }
+    else if (roomy) { if (++calm >= 3 && scale < ceiling - .005) { good = scale; trial = true; step(Math.min(ceiling, scale * 1.13)); } }
+    else calm = 0;
+  }
+
   const updaters = []; let running = true, time = 0, frames = 0;
   function frame(dt) {
     if (!running || document.hidden) return;
+    pace(dt * 1000); if (dirty) applyScale();
     dt = Math.min(.05, dt); time += dt; frames++;
     if (pointer.touch) { pointer.x = Math.sin(time * .31) * .35; pointer.y = Math.cos(time * .23) * .25; }
     const k = 1 - Math.exp(-dt * 4.2); pointer.sx += (pointer.x - pointer.sx) * k; pointer.sy += (pointer.y - pointer.sy) * k;
     world.rotation.y = pointer.sx * .04; world.rotation.x = -pointer.sy * .024;
-    bU.uTime.value = time; bU.uMouse.value.set(pointer.sx, pointer.sy); mFxaa.uniforms.uTime.value = time;
+    bU.uTime.value = time; bU.uMouse.value.set(pointer.sx, pointer.sy); mComp.uniforms.uTime.value = time;
     scene.environmentRotation.y = time * .025 + pointer.sx * .3;
     for (const u of updaters) u(time, dt);
 
@@ -176,25 +180,21 @@ export function createStage(canvas, { onProgress } = {}) {
     renderer.autoClear = false;
     for (let i = 3; i > 0; i--) { mUp.uniforms.tMap.value = bl[i].texture; mUp.uniforms.uTexel.value.set(1 / bl[i].width, 1 / bl[i].height); pass(mUp, bl[i - 1]); }
     renderer.autoClear = true;
-    pass(mComp, ldrRT); pass(mFxaa, null);
+    pass(mComp, null);
     if (query) { gl.endQuery(tq.TIME_ELAPSED_EXT); pending = query; query = null; }
     else if (pending && gl.getQueryParameter(pending, gl.QUERY_RESULT_AVAILABLE)) {
-      if (!gl.getParameter(tq.GPU_DISJOINT_EXT)) { const ms = gl.getQueryParameter(pending, gl.QUERY_RESULT) / 1e6; gpuMs = gpuMs ? gpuMs * .88 + ms * .12 : ms; }
+      if (!gl.getParameter(tq.GPU_DISJOINT_EXT)) { const ms = gl.getQueryParameter(pending, gl.QUERY_RESULT) / 1e6; gpuMs = gpuMs ? gpuMs * .85 + ms * .15 : ms; }
       gl.deleteQuery(pending); pending = null;
     }
-    // adapt: prefer real GPU time; otherwise infer from frame pacing (ignoring a steady browser cap such as 30 fps power saving)
-    const ms = dt * 1000; dtVar = dtVar * .95 + Math.abs(ms - dtAvg) * .05; dtAvg = dtAvg * .95 + ms * .05;
-    const timed = tq && gpuMs > 0, over = timed ? gpuMs > 7.5 : (dtAvg > 21 && dtVar > 2.5), under = timed ? gpuMs < 3.6 : dtAvg < 12;
-    hot = over ? hot + 1 : 0; cool = under ? cool + 1 : 0;
-    if (hot > 40 && scale > .56) { scale = Math.max(.55, scale * .86); applyScale(); hot = 0; gpuMs *= .76; }
-    else if (cool > 240 && scale < cap() - .01) { scale = Math.min(cap(), scale * 1.1); applyScale(); cool = 0; }
   }
 
   const kz = z => 2 * (CAM_Z - z) * TAN / size.h;
   // rect in viewport CSS pixels -> world position at depth z; returns world units per CSS pixel
   const place = (r, z, out) => { const s = kz(z); out.x = (r.left + r.width / 2 - size.w / 2) * s; out.y = -(r.top + r.height / 2 - size.h / 2) * s; out.z = z; return s; };
 
-  return { THREE, renderer, scene, camera, world, flat, size, pointer, loading, backdrop: bU, post: { comp: mComp.uniforms, fxaa: mFxaa.uniforms, bright: mBright.uniforms }, kz, place, small, frame,
+  return { THREE, renderer, scene, camera, world, flat, size, pointer, loading, backdrop: bU, post: { comp: mComp.uniforms, bright: mBright.uniforms }, kz, place, small, frame, settle: n => { hold = Math.max(hold, n); },
+    // compile every program and upload every texture for the real target, so no scene hitches the first time it scrolls in
+    warm: () => { try { renderer.setRenderTarget(mainRT); renderer.compile(scene, camera); renderer.render(scene, camera); } catch (e) {} renderer.setRenderTarget(null); },
     onFrame: f => updaters.push(f), onResize: f => listeners.push(f), setRunning: v => { running = v; },
-    get time() { return time; }, get frames() { return frames; }, get gpuMs() { return gpuMs; }, get scale() { return scale; } };
+    get time() { return time; }, get frames() { return frames; }, get gpuMs() { return gpuMs; }, get scale() { return scale; }, get fps() { return fps; } };
 }

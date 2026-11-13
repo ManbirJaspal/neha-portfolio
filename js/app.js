@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { createStage } from './gl/stage.js';
 import { GlassForm, Core, Droplets } from './gl/glass.js';
 import { GLText, GLImage, GLTiles } from './gl/doc.js';
-import { Dust, Caustics, Marquee } from './gl/fx.js';
+import { Field, Caustics, Marquee } from './gl/fx.js';
 import { Work, PHONE, PROJECT_TONES } from './gl/work.js';
 import { Rings } from './gl/rings.js';
 import { hydrate, src } from './media.js';
@@ -87,8 +87,8 @@ let T = {}, rings = null, work = null, formB = null, rasterAll = () => {};
 if (stage) {
   window.__stage = stage; document.body.classList.add('gl-on');
   const small = stage.small, V = () => new THREE.Vector3();
-  const formA = new GlassForm(stage, { side: THREE.DoubleSide }), coreA = new Core(stage); formB = new GlassForm(stage, { side: THREE.DoubleSide }); const coreB = new Core(stage); formB.mesh.visible = coreB.mesh.visible = false;
-  const drops = new Droplets(stage, small ? 5 : 7), dust = new Dust(stage, small ? 110 : 240), caustics = new Caustics(stage);
+  const formA = new GlassForm(stage), coreA = new Core(stage); formB = new GlassForm(stage); const coreB = new Core(stage); formB.mesh.visible = coreB.mesh.visible = false;
+  const drops = new Droplets(stage, small ? 5 : 7), field = new Field(stage, +new URLSearchParams(location.search).get('p') || (small ? 70000 : 190000)), caustics = new Caustics(stage);
   work = new Work(stage, PROJECTS.slice(1).map(p => p.img));
   const imgs = $$('.glimg').map(el => ({ gl: new GLImage(stage, el, { radius: 24 }), L: track(el) }));
   const tiles = { gl: new GLTiles(stage, $('#tilesImg')), L: track($('#tilesImg')) };
@@ -98,7 +98,7 @@ if (stage) {
     aHero: track($('#aHero')), aSt: track($('#aStatement')), aIm: track($('#aImpact')), aSk: track($('#aSkills')), aCo: track($('#aContact')), stageBox: track($('#workStage'), true) };
   const A0 = V(), A1 = V(), C = V(), B = V(), P = V(), M = V(), qBlob = new THREE.Quaternion(), eul = new THREE.Euler();
   const col = { a: new THREE.Color(), b: new THREE.Color(), c: new THREE.Color() }, light = new THREE.Vector2();
-  const PAL = { hero: ['#5B4BFF', '#1B3BFF', '#FF6A4D', .3, .32, 1], st: ['#3D5BFF', '#152C9A', '#B03CFF', .34, .18, .8], impact: ['#F4B740', '#FF6A3D', '#6B5BFF', 0, .44, 1.1], skills: ['#35B8CE', '#5B4BFF', '#B03CFF', -.05, .12, .7], about: ['#6B5BFF', '#24135A', '#F4B740', -.36, .36, .45], contact: ['#6B5BFF', '#FF5FA2', '#F4B740', .28, .24, 1.1] };
+  const PAL = { hero: ['#5B4BFF', '#1B3BFF', '#FF6A4D', .3, .32, 1], st: ['#3D5BFF', '#152C9A', '#B03CFF', .34, .18, .8], impact: ['#7A4BFF', '#3A1C8F', '#F4B740', 0, .44, 1.1], skills: ['#2F6BFF', '#141A7A', '#35D0E0', -.05, .12, .6], about: ['#6B5BFF', '#24135A', '#F4B740', -.36, .36, .45], contact: ['#6B5BFF', '#FF5FA2', '#F4B740', .28, .24, 1.1] };
   let chatT = 0, lastB = '', lastMode = '', rays = 1;
 
   document.fonts.ready.then(() => Promise.all([document.fonts.load('500 semi-expanded 100px "Roboto Flex"'), document.fonts.load('italic 400 100px "Instrument Serif"'), document.fonts.load('400 20px "Hanken Grotesk"'), document.fonts.load('600 20px "Hanken Grotesk"')]).catch(() => {})).then(() => {
@@ -208,15 +208,22 @@ if (stage) {
     });
     drops.step(dt, mode !== lastMode && mode !== ''); if (mode) lastMode = mode;
 
-    // atmosphere: dust drifts with the page; the light takes the colour of the chapter or project in focus
-    dust.u.uTime.value = time; dust.u.uScroll.value = sy * stage.kz(0) * .55; dust.u.uPR.value = stage.size.pr * stage.size.scale; dust.u.uStreak.value = Math.abs(velN);
+    // atmosphere: the light takes the colour of the chapter or project in focus
     const mid = H * .5, rAb = R('about');
     let pal = PAL.hero, tone = null;
     if (rCo.top < mid) pal = PAL.contact; else if (rAb.top < mid) pal = PAL.about; else if (rSk.top < mid) pal = PAL.skills; else if (rIm.top < mid) pal = PAL.impact; else if (rWork.top < mid) { pal = PAL.st; tone = PROJECT_TONES[STOPS[Math.max(0, S.stop)].pr]; } else if (rSt.top < mid) pal = PAL.st;
     col.a.set(tone || pal[0]); col.b.set(pal[1]); col.c.set(tone ? '#6B5BFF' : pal[2]); if (tone) col.b.copy(col.a).multiplyScalar(.45);
     const kc = 1 - Math.exp(-dt * 2.2), bd = stage.backdrop; bd.uA.value.lerp(col.a, kc); bd.uB.value.lerp(col.b, kc); bd.uC.value.lerp(col.c, kc);
     light.set(pal[3], pal[4]); bd.uLight.value.lerp(light, kc); rays = damp(rays, pal[5], 2, dt); bd.uRays.value = rays * ia;
-    dust.u.uTint.value.lerp(col.a, kc); dust.u.uGain.value = damp(dust.u.uGain.value, (pal === PAL.about ? .55 : 1) * ia, 2, dt);
+
+    // the field takes the order of the chapter on screen: halo, streams, floor, rising floor, globe, still air, spiral
+    const fk = r => clamp((H * .9 - r.top) / (H * .6)), fc = Math.min(5.999, fk(rSt) + fk(rWork) + fk(rIm) + fk(rSk) + fk(rAb) + fk(rCo)), fu = field.u;
+    fu.uFrom.value = Math.floor(fc); fu.uTo.value = Math.floor(fc) + 1; fu.uMix.value = fc % 1;
+    fu.uTime.value = time; fu.uPR.value = stage.size.pr; fu.uVW.value = stage.size.vw; fu.uVH.value = stage.size.vh; fu.uVert.value = narrow ? 1 : 0;
+    fu.uVel.value = Math.abs(velN); fu.uScroll.value = sy * stage.kz(0) * .55; fu.uPtr.value.set(ptr.sx, ptr.sy); fu.uPtrOn.value = ptr.touch ? 0 : 1; fu.uIntro.value = ia;
+    if (showA) fu.uFA.value.set(P.x, P.y, P.z, radA); if (showB) fu.uFB.value.set(formB.mesh.position.x, formB.mesh.position.y, formB.mesh.position.z, radB);
+    fu.uSplit.value = showA && m < .5 ? P.z : showB ? formB.mesh.position.z : 99;
+    fu.uA.value.lerp(col.a, kc); fu.uB.value.lerp(col.c, kc); fu.uGain.value = damp(fu.uGain.value, pal[6] || 1, 2, dt);
     caustics.u.uA.value.lerp(col.a, kc); coreA.u.uA.value.lerp(col.a, kc); coreB.u.uA.value.lerp(col.a, kc);
 
     // page chrome
@@ -248,7 +255,7 @@ gsap.ticker.add(() => { const now = performance.now(), dt = (now - lastNow) / 10
 })();
 function warm() { // compile every shader behind the loader so the first scroll into each scene does not hitch
   if (!stage) return; const objs = []; stage.scene.traverse(o => { if (o.isMesh || o.isPoints || o.isLine || o.isGroup) objs.push(o); }); const prev = objs.map(o => o.visible);
-  objs.forEach(o => { o.visible = true; }); try { stage.renderer.compile(stage.scene, stage.camera); } catch (e) {} objs.forEach((o, i) => { o.visible = prev[i]; });
+  objs.forEach(o => { o.visible = true; }); stage.warm(); objs.forEach((o, i) => { o.visible = prev[i]; }); stage.settle(100);
 }
 function start() {
   warm(); $('#loader').classList.add('done'); document.body.classList.remove('is-loading'); lenis && lenis.start(); S.started = true;
