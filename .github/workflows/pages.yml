@@ -1,0 +1,58 @@
+name: pages
+
+# Copies the images from the old Framer site into the build (so the new site does not depend on it),
+# assembles the static site and deploys it to GitHub Pages. Runs on every push to main.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Restore image files from cache
+        uses: actions/cache@v4
+        with:
+          path: img
+          key: img-v1-${{ hashFiles('tools/build-images.mjs', 'js/cases.js', 'js/app.js', 'index.html') }}
+          restore-keys: img-v1-
+      - name: Build image files (512 / 1024 / 2048 px WebP)
+        run: |
+          npm --prefix tools install --no-audit --no-fund
+          node tools/build-images.mjs || { echo "::warning::image build failed, deploying with remote images"; git checkout js/media.js; }
+      - name: Assemble site
+        run: |
+          mkdir -p _site/img
+          cp -r index.html .nojekyll css js _site/
+          cp -r img/. _site/img/ 2>/dev/null || true
+          ls _site/img | wc -l
+          du -sh _site
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

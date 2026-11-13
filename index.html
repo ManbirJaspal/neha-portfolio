@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Neha Jaspal, AI product designer</title>
+<meta name="description" content="Neha Jaspal is an AI product designer and systems thinker with a PM mindset. 10+ years across e-commerce, travel and healthtech. Currently at eBay.">
+<meta name="theme-color" content="#0F0C24">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:ital,wght@0,300..700;1,400&family=Roboto+Flex:opsz,wdth,wght@8..144,25..151,100..1000&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/site.css">
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js" } }
+</script>
+</head>
+<body data-theme="ink" class="is-loading">
+
+<canvas id="field" aria-hidden="true"></canvas>
+
+<header id="nav">
+  <a class="nav-name" href="#top" data-nav="top">Neha Jaspal</a>
+  <nav aria-label="Primary">
+    <a href="#work" data-nav="work">Work</a>
+    <a href="#about" data-nav="about">About</a>
+    <a href="#contact" data-nav="contact">Contact</a>
+    <button class="ask-btn" id="askOpen" type="button" aria-haspopup="dialog">Ask <kbd>⌘K</kbd></button>
+  </nav>
+</header>
+
+<main id="home">
+
+  <section class="hero" id="top" data-theme="ink">
+    <div class="hero-copy">
+      <h1 class="hero-title" id="heroTitle" aria-label="AI product designer, systems thinker with a PM mindset">
+        <span class="ln">AI product designer,</span>
+        <span class="ln">systems thinker</span>
+        <span class="ln">with a PM mindset</span>
+      </h1>
+      <p class="hero-lead rise">Hi, I’m Neha. For 10+ years, I’ve shaped products across e-commerce, travel, and healthtech, bringing clarity to complex systems and helping teams turn ambiguity into clear direction and thoughtful experiences.</p>
+      <p class="hero-focus rise"><span>Agentic commerce</span><span>Gen AI</span><span>Conversational UX</span><span>Prompt engineering</span><span>Systems thinker</span></p>
+      <p class="hero-now rise"><i class="pulse"></i>Currently at eBay</p>
+    </div>
+    <p class="hero-hint rise">Move through the field. It settles when you stop.</p>
+  </section>
+
+  <section class="work" id="work" data-theme="ink">
+    <header class="sec-head">
+      <h2>Selected work</h2>
+      <p>Five projects across marketplace returns, pharmacy and air travel.</p>
+    </header>
+    <div class="work-list" id="workList"></div>
+    <div class="clients" aria-label="Companies Neha has designed for">
+      <div class="clients-track" id="clients"></div>
+    </div>
+  </section>
+
+  <section class="skills" id="skills" data-theme="fog">
+    <header class="sec-head">
+      <h2>Skills</h2>
+      <p>Eighteen of them, held together like a system. Drag any node and watch the rest adjust.</p>
+    </header>
+    <div class="graph" id="graph" aria-hidden="true"><svg id="graphLines"></svg></div>
+    <ul class="sr-only" id="skillsList"></ul>
+  </section>
+
+  <section class="about" id="about" data-theme="fog">
+    <div class="about-top">
+      <figure class="about-portrait"><img data-img="KQyEdy3SJhyXjPQAb9d7L8mZ8.png" data-w="1024" width="710" height="904" alt="Neha Jaspal seated at a café table, smiling" loading="lazy"></figure>
+      <div class="about-bio">
+        <h2>Neha Jaspal</h2>
+        <p class="lead">Born and raised in the Middle East, I moved to Toronto a few years ago, bringing with me a deep appreciation for diverse cultures and perspectives.</p>
+        <p>Creativity, passion, and storytelling shape everything I do. Guided by empathy and collaboration, I strive to design meaningful, intuitive, and human-centered experiences.</p>
+        <p>I draw inspiration from art, architecture, travel, and the cultures and communities I encounter along the way. These influences help me see challenges through different lenses and bring thoughtful perspectives to my work. I’m always curious, continuously learning, and inspired by the opportunity to create experiences that make a meaningful impact.</p>
+      </div>
+    </div>
+
+    <div class="outside">
+      <div class="outside-copy">
+        <h3>Outside of work…</h3>
+        <p>I love traveling to new countries, discovering cafes and restaurants or playing pickleball. I enjoy painting, spending time in nature to decompress, and diving into conversations on design, architecture, aviation, art, interiors, fashion, and F1. Always curious, always exploring!</p>
+      </div>
+      <figure class="outside-photo"><img data-img="fAGmcO6XFKJvQAixNApjAWOBElg.jpg" data-w="1024" width="1170" height="1167" alt="A grid of nine travel photos: city streets, cafés, towers and an aircraft on the apron" loading="lazy"></figure>
+    </div>
+
+    <div class="bento">
+      <article class="cell trips">
+        <h4>Recent trips</h4>
+        <svg id="tripMap" viewBox="0 0 520 220" role="img" aria-label="Routes from Toronto to Lisbon, Vienna and Budapest"></svg>
+        <p>Vienna, Budapest, Lisbon</p>
+      </article>
+      <article class="cell cares">
+        <h4>Some things I care about</h4>
+        <ul><li>Accessibility</li><li>Mental health and wellness</li><li>Diversity and inclusion</li><li>Social impact</li></ul>
+      </article>
+      <article class="cell read">
+        <h4>Currently reading</h4>
+        <p class="big">The Power of Moments</p>
+        <p>Chip Heath and Dan Heath</p>
+      </article>
+      <article class="cell listen">
+        <h4>Podcasts</h4>
+        <p class="big">Lenny’s Podcast</p>
+        <p>Tech</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="contact" id="contact" data-theme="iris">
+    <h2 class="contact-title">Got a project or just a coffee chat? Let’s connect!</h2>
+    <div class="contact-actions">
+      <button class="mail" id="copyMail" type="button"><span class="mail-addr">nehajaspal.nj@gmail.com</span><span class="mail-do" aria-live="polite">Copy address</span></button>
+      <a class="plain" href="mailto:nehajaspal.nj@gmail.com">Open in mail</a>
+      <a class="plain" href="https://www.linkedin.com/in/nehajaspal/" target="_blank" rel="noopener">LinkedIn</a>
+    </div>
+    <footer><span>Neha Jaspal</span><span>Toronto</span><a href="#top" data-nav="top">Back to top</a></footer>
+  </section>
+</main>
+
+<main id="case" hidden></main>
+
+<div class="curtain" id="curtain" aria-hidden="true"><span id="curtainLabel"></span></div>
+
+<div class="ask" id="ask" role="dialog" aria-modal="false" aria-label="Ask the portfolio" hidden>
+  <header><div><strong>Ask the portfolio</strong><small>A scripted guide. No model behind it.</small></div><button type="button" id="askClose" aria-label="Close">Close</button></header>
+  <div class="ask-log" id="askLog" aria-live="polite"></div>
+  <form id="askForm" autocomplete="off"><input id="askInput" type="text" placeholder="Type here, or pick a chip" aria-label="Ask a question"><button type="submit" aria-label="Send"><svg viewBox="0 0 20 20" width="16" height="16"><path d="M3 10h13M11 5l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button></form>
+</div>
+
+<div class="lightbox" id="lightbox" hidden><button type="button" aria-label="Close image">Close</button><img alt=""></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.14.2/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.14.2/ScrollTrigger.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lenis@1.3.27/dist/lenis.min.js"></script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
