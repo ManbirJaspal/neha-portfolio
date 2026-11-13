@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -34,6 +34,13 @@ jobs:
         run: |
           npm --prefix tools install --no-audit --no-fund
           node tools/build-images.mjs || { echo "::warning::image build failed, deploying with remote images"; git checkout js/media.js; }
+      - name: Keep the image files in the repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f img
+          git diff --cached --quiet || { git commit -m "Add image files copied from the old site" && git push; }
+          du -sh img
       - name: Assemble site
         run: |
           mkdir -p _site/img
