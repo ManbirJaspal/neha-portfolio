@@ -59,15 +59,16 @@ export class ChatScreen {
 }
 
 const REVEAL_V = ['#include <common>', '#include <common>\nvarying float vRy;'], REVEAL_V2 = ['#include <begin_vertex>', '#include <begin_vertex>\nvRy=position.y;'];
-function revealable(mat, u, glow = true) {
+function revealable(mat, u, glow = true, cap = 0) {
   mat.onBeforeCompile = sh => {
     sh.uniforms.uReveal = u;
     sh.vertexShader = sh.vertexShader.replace(...REVEAL_V).replace(...REVEAL_V2);
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vRy; uniform float uReveal;')
       .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\nif(vRy>uReveal) discard;');
+    if (cap) sh.fragmentShader = sh.fragmentShader.replace('#include <opaque_fragment>', `#include <opaque_fragment>\ngl_FragColor.rgb=min(gl_FragColor.rgb,vec3(${cap.toFixed(2)}));`); // a studio light in the reflection must not burn out the screen
     if (glow) sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance+=vec3(.55,.45,1.)*smoothstep(.16,0.,uReveal-vRy)*step(uReveal,1.7)*4.;');
   };
-  mat.customProgramCacheKey = () => 'reveal' + glow + mat.type;
+  mat.customProgramCacheKey = () => 'reveal' + glow + cap + mat.type;
   return mat;
 }
 
@@ -127,7 +128,7 @@ export class Work {
     new GLTFLoader(stage.loading).load('assets/phone.glb', g => {
       let screen = null; g.scene.traverse(o => { if (o.isMesh) { if (o.material.name === 'Screen') screen = o; o.material = M[o.material.name] || M.Titanium; o.frustumCulled = false; } });
       if (screen) { // cover glass: studio reflections drawn over the lit screen
-        const glare = new THREE.Mesh(screen.geometry, revealable(new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 1, roughness: .07, envMapIntensity: .12, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }), this.reveal, false));
+        const glare = new THREE.Mesh(screen.geometry, revealable(new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 1, roughness: .07, envMapIntensity: .12, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }), this.reveal, false, .34));
         glare.position.copy(screen.position); glare.quaternion.copy(screen.quaternion); glare.scale.copy(screen.scale); glare.position.z += .004; glare.frustumCulled = false; screen.parent.add(glare);
       }
       this.phone.add(g.scene); this.chat.set(0);
