@@ -6,11 +6,14 @@ A static site with a continuous WebGL scene behind the page. No build step for t
 
 - `index.html`, `css/site.css`: the page and its styles
 - `js/app.js`: scroll choreography, navigation, the ask panel, case-study routing
-- `js/gl/stage.js`: renderer, studio lighting, aurora backdrop, bloom and grain
+- `js/gl/stage.js`: renderer, studio lighting, backdrop, bloom and grain; picks a working resolution the machine can hold (frame pacing, plus the GPU timer where the browser has one)
 - `js/gl/glass.js`: the glass form that morphs from blob to lens to slab (shape computed in the vertex shader)
 - `js/gl/doc.js`: page text and images drawn in WebGL at their DOM positions, so the glass can bend them
 - `js/gl/work.js`: the phone with the live returns chat, and the glass blocks for the other projects
 - `js/gl/rings.js`: the skills orbit
+- `js/gl/fx.js`: the field of points that reorders itself in every chapter (positions computed in the vertex shader), caustics, the outcomes marquee
+
+Append `?p=40000` to the URL to set the number of points in the field (default 190,000, or 70,000 on small screens).
 - `js/chat.js`, `js/cases.js`: the returns chat flow and the three case studies
 - `js/media.js`: one switch for where images load from
 
