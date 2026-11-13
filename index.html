@@ -5,18 +5,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Neha Jaspal, AI product designer</title>
 <meta name="description" content="Neha Jaspal is an AI product designer and systems thinker with a PM mindset. 10+ years across e-commerce, travel and healthtech. Currently at eBay.">
-<meta name="theme-color" content="#0F0C24">
+<meta name="theme-color" content="#05040C">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:ital,wght@0,300..700;1,400&family=Roboto+Flex:opsz,wdth,wght@8..144,25..151,100..1000&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:ital,wght@0,300..700;1,400&family=Instrument+Serif:ital@0;1&family=Roboto+Flex:opsz,wdth,wght@8..144,25..151,100..1000&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/site.css">
 <script type="importmap">
-{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js" } }
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/" } }
 </script>
 </head>
-<body data-theme="ink" class="is-loading">
+<body class="is-loading">
 
-<canvas id="field" aria-hidden="true"></canvas>
+<canvas id="gl" aria-hidden="true"></canvas>
+
+<div id="loader" aria-hidden="true">
+  <p class="ld-label">Resolving ambiguity</p>
+  <p class="ld-n"><span id="ldN">00</span></p>
+  <i class="ld-bar"><b id="ldBar"></b></i>
+</div>
 
 <header id="nav">
   <a class="nav-name" href="#top" data-nav="top">Neha Jaspal</a>
@@ -30,43 +36,43 @@
 
 <main id="home">
 
-  <section class="hero" id="top" data-theme="ink">
-    <div class="hero-copy">
-      <h1 class="hero-title" id="heroTitle" aria-label="AI product designer, systems thinker with a PM mindset">
-        <span class="ln">AI product designer,</span>
-        <span class="ln">systems thinker</span>
-        <span class="ln">with a PM mindset</span>
-      </h1>
-      <p class="hero-lead rise">Hi, I’m Neha. For 10+ years, I’ve shaped products across e-commerce, travel, and healthtech, bringing clarity to complex systems and helping teams turn ambiguity into clear direction and thoughtful experiences.</p>
-      <p class="hero-focus rise"><span>Agentic commerce</span><span>Gen AI</span><span>Conversational UX</span><span>Prompt engineering</span><span>Systems thinker</span></p>
-      <p class="hero-now rise"><i class="pulse"></i>Currently at eBay</p>
-    </div>
-    <p class="hero-hint rise">Move through the field. It settles when you stop.</p>
-  </section>
-
-  <section class="work" id="work" data-theme="ink">
-    <header class="sec-head">
-      <h2>Selected work</h2>
-      <p>Five projects across marketplace returns, pharmacy and air travel.</p>
-    </header>
-    <div class="work-list" id="workList"></div>
-    <div class="clients" aria-label="Companies Neha has designed for">
-      <div class="clients-track" id="clients"></div>
+  <section class="hero" id="top">
+    <h1 class="hero-title gltext" id="heroTitle">
+      <span class="ln">AI product designer,</span>
+      <span class="ln"><em>systems thinker</em></span>
+      <span class="ln">with a PM mindset</span>
+    </h1>
+    <i class="anchor" id="aHero"></i>
+    <div class="hero-foot rise">
+      <p class="hero-now"><i class="pulse"></i>Currently at eBay</p>
+      <p class="hero-focus"><span>Agentic commerce</span><span>Gen AI</span><span>Conversational UX</span><span>Prompt engineering</span><span>Systems thinker</span></p>
+      <p class="hero-hint">Scroll to bring it into focus</p>
     </div>
   </section>
 
-  <section class="skills" id="skills" data-theme="fog">
-    <header class="sec-head">
-      <h2>Skills</h2>
-      <p>Eighteen of them, held together like a system. Drag any node and watch the rest adjust.</p>
-    </header>
-    <div class="graph" id="graph" aria-hidden="true"><svg id="graphLines"></svg></div>
-    <ul class="sr-only" id="skillsList"></ul>
+  <section class="statement" id="statement">
+    <p class="statement-text gltext" id="statementText">Hi, I’m Neha. For 10+ years, I’ve shaped products across e-commerce, travel, and healthtech, <em>bringing clarity to complex systems</em> and helping teams turn ambiguity into clear direction and thoughtful experiences.</p>
+    <i class="anchor" id="aStatement"></i>
   </section>
 
-  <section class="about" id="about" data-theme="fog">
+  <section class="work" id="work">
+    <div class="work-pin">
+      <header class="work-head"><h2>Selected work</h2><p class="work-count"><b id="workN">01</b><span>/ 05</span></p></header>
+      <div class="work-info" id="workInfo"></div>
+      <div class="work-stage" id="workStage"></div>
+      <ol class="work-dots" id="workDots"></ol>
+    </div>
+  </section>
+
+  <section class="skills" id="skills">
+    <header class="skills-head"><h2 class="gltext" id="skillsTitle">Skills</h2><p>Eighteen of them in orbit. Drag to spin.</p></header>
+    <i class="anchor" id="aSkills"></i>
+    <div class="skills-cols" id="skillsCols"></div>
+  </section>
+
+  <section class="about" id="about">
     <div class="about-top">
-      <figure class="about-portrait"><img data-img="KQyEdy3SJhyXjPQAb9d7L8mZ8.png" data-w="1024" width="710" height="904" alt="Neha Jaspal seated at a café table, smiling" loading="lazy"></figure>
+      <figure class="about-portrait"><img class="glimg" data-img="KQyEdy3SJhyXjPQAb9d7L8mZ8.png" data-w="1024" width="710" height="904" alt="Neha Jaspal seated at a café table, smiling"></figure>
       <div class="about-bio">
         <h2>Neha Jaspal</h2>
         <p class="lead">Born and raised in the Middle East, I moved to Toronto a few years ago, bringing with me a deep appreciation for diverse cultures and perspectives.</p>
@@ -74,15 +80,13 @@
         <p>I draw inspiration from art, architecture, travel, and the cultures and communities I encounter along the way. These influences help me see challenges through different lenses and bring thoughtful perspectives to my work. I’m always curious, continuously learning, and inspired by the opportunity to create experiences that make a meaningful impact.</p>
       </div>
     </div>
-
     <div class="outside">
       <div class="outside-copy">
         <h3>Outside of work…</h3>
         <p>I love traveling to new countries, discovering cafes and restaurants or playing pickleball. I enjoy painting, spending time in nature to decompress, and diving into conversations on design, architecture, aviation, art, interiors, fashion, and F1. Always curious, always exploring!</p>
       </div>
-      <figure class="outside-photo"><img data-img="fAGmcO6XFKJvQAixNApjAWOBElg.jpg" data-w="1024" width="1170" height="1167" alt="A grid of nine travel photos: city streets, cafés, towers and an aircraft on the apron" loading="lazy"></figure>
+      <figure class="outside-photo"><img class="glimg" data-img="fAGmcO6XFKJvQAixNApjAWOBElg.jpg" data-w="1024" width="1170" height="1167" alt="A grid of nine travel photos: city streets, cafés, towers and an aircraft on the apron"></figure>
     </div>
-
     <div class="bento">
       <article class="cell trips">
         <h4>Recent trips</h4>
@@ -93,21 +97,14 @@
         <h4>Some things I care about</h4>
         <ul><li>Accessibility</li><li>Mental health and wellness</li><li>Diversity and inclusion</li><li>Social impact</li></ul>
       </article>
-      <article class="cell read">
-        <h4>Currently reading</h4>
-        <p class="big">The Power of Moments</p>
-        <p>Chip Heath and Dan Heath</p>
-      </article>
-      <article class="cell listen">
-        <h4>Podcasts</h4>
-        <p class="big">Lenny’s Podcast</p>
-        <p>Tech</p>
-      </article>
+      <article class="cell read"><h4>Currently reading</h4><p class="big">The Power of Moments</p><p>Chip Heath and Dan Heath</p></article>
+      <article class="cell listen"><h4>Podcasts</h4><p class="big">Lenny’s Podcast</p><p>Tech</p></article>
     </div>
   </section>
 
-  <section class="contact" id="contact" data-theme="iris">
-    <h2 class="contact-title">Got a project or just a coffee chat? Let’s connect!</h2>
+  <section class="contact" id="contact">
+    <h2 class="contact-title gltext" id="contactTitle"><span class="ln">Got a project or just</span> <span class="ln">a coffee chat?</span> <span class="ln"><em>Let’s connect!</em></span></h2>
+    <i class="anchor" id="aContact"></i>
     <div class="contact-actions">
       <button class="mail" id="copyMail" type="button"><span class="mail-addr">nehajaspal.nj@gmail.com</span><span class="mail-do" aria-live="polite">Copy address</span></button>
       <a class="plain" href="mailto:nehajaspal.nj@gmail.com">Open in mail</a>
@@ -128,6 +125,7 @@
 </div>
 
 <div class="lightbox" id="lightbox" hidden><button type="button" aria-label="Close image">Close</button><img alt=""></div>
+<div id="cur" aria-hidden="true"><i></i><span></span></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.14.2/gsap.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.14.2/ScrollTrigger.min.js"></script>

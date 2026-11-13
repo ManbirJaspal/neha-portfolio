@@ -3,9 +3,9 @@ import { src, VIDEO } from './media.js';
 import { Chat, FLOW } from './chat.js';
 
 const fig = (id, alt, r = '16/9', cap = '') => `<figure class="fig" data-zoom="${src(id, 2048)}" tabindex="0" role="button" aria-label="Enlarge image: ${alt}"><img src="${src(id, 2048)}" alt="${alt}" loading="lazy" style="aspect-ratio:${r}">${cap ? `<figcaption>${cap}</figcaption>` : ''}</figure>`;
-const head = (c) => `<p class="cs-co">${c.co}</p><h1>${c.title}</h1>
+const head = (c) => `<header class="cs-top"><p class="cs-co">${c.co}</p><h1>${c.title}</h1>
   <div class="cs-hero"><img src="${src(c.hero, 2048)}" alt="${c.heroAlt}" style="aspect-ratio:${c.heroR}"></div>
-  <dl class="cs-meta">${c.meta.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>`;
+  <dl class="cs-meta">${c.meta.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl></header>`;
 const rows = (list) => `<div class="rows">${list.map(([k, v]) => `<div class="row"><h3>${k}</h3>${v.startsWith('<') ? v : `<p>${v}</p>`}</div>`).join('')}</div>`;
 
 /* ------------------------------------------------------------------ eBay */
