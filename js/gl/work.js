@@ -84,9 +84,16 @@ export class Work {
       BackGlass: revealable(new THREE.MeshPhysicalMaterial({ color: 0x0b0a18, roughness: .14, clearcoat: 1, clearcoatRoughness: .05, envMapIntensity: 1.2 }), this.reveal),
       Black: revealable(new THREE.MeshStandardMaterial({ color: 0x030306, roughness: .4 }), this.reveal),
       Lens: revealable(new THREE.MeshPhysicalMaterial({ color: 0x05050c, roughness: .03, clearcoat: 1, metalness: .3 }), this.reveal),
-      Screen: revealable(new THREE.MeshBasicMaterial({ map: this.chat.tex, color: 0xe4e4ea }), this.reveal, false),
+      Screen: revealable(new THREE.MeshBasicMaterial({ map: this.chat.tex, color: 0xdcdce4 }), this.reveal, false),
     };
-    new GLTFLoader(stage.loading).load('assets/phone.glb', g => { g.scene.traverse(o => { if (o.isMesh) { o.material = M[o.material.name] || M.Titanium; o.frustumCulled = false; } }); this.phone.add(g.scene); this.chat.set(0); });
+    new GLTFLoader(stage.loading).load('assets/phone.glb', g => {
+      let screen = null; g.scene.traverse(o => { if (o.isMesh) { if (o.material.name === 'Screen') screen = o; o.material = M[o.material.name] || M.Titanium; o.frustumCulled = false; } });
+      if (screen) { // cover glass: studio reflections drawn over the lit screen
+        const glare = new THREE.Mesh(screen.geometry, revealable(new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 1, roughness: .07, envMapIntensity: .13, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }), this.reveal, false));
+        glare.position.copy(screen.position); glare.quaternion.copy(screen.quaternion); glare.scale.copy(screen.scale); glare.position.z += .004; glare.frustumCulled = false; screen.parent.add(glare);
+      }
+      this.phone.add(g.scene); this.chat.set(0);
+    });
     // glass blocks
     const geo = new RoundedBoxGeometry(4.08, 2.38, .26, 6, .09), plane = new THREE.PlaneGeometry(3.78, 2.08), loader = new THREE.TextureLoader(stage.loading);
     this.blocks = images.map((id, i) => {
