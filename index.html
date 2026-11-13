@@ -17,6 +17,8 @@
 <body class="is-loading">
 
 <canvas id="gl" aria-hidden="true"></canvas>
+<i id="prog" aria-hidden="true"></i>
+<nav id="rail" aria-label="Sections"></nav>
 
 <div id="loader" aria-hidden="true">
   <p class="ld-label">Resolving ambiguity</p>
@@ -64,6 +66,12 @@
     </div>
   </section>
 
+  <section class="impact" id="impact">
+    <h2 class="impact-title">Outcomes</h2>
+    <i class="anchor" id="aImpact"></i>
+    <ul class="impact-list" id="impactList"></ul>
+  </section>
+
   <section class="skills" id="skills">
     <header class="skills-head"><h2 class="gltext" id="skillsTitle">Skills</h2><p>Eighteen of them in orbit. Drag to spin.</p></header>
     <i class="anchor" id="aSkills"></i>
@@ -85,7 +93,7 @@
         <h3>Outside of work…</h3>
         <p>I love traveling to new countries, discovering cafes and restaurants or playing pickleball. I enjoy painting, spending time in nature to decompress, and diving into conversations on design, architecture, aviation, art, interiors, fashion, and F1. Always curious, always exploring!</p>
       </div>
-      <figure class="outside-photo"><img class="glimg" data-img="fAGmcO6XFKJvQAixNApjAWOBElg.jpg" data-w="1024" width="1170" height="1167" alt="A grid of nine travel photos: city streets, cafés, towers and an aircraft on the apron"></figure>
+      <figure class="outside-photo"><img class="gltiles" id="tilesImg" data-img="fAGmcO6XFKJvQAixNApjAWOBElg.jpg" data-w="1024" width="1170" height="1167" alt="A grid of nine travel photos: city streets, cafés, towers and an aircraft on the apron"></figure>
     </div>
     <div class="bento">
       <article class="cell trips">

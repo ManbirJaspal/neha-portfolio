@@ -1,10 +1,10 @@
-// Skills as rings of type in orbit around the glass. The glass bends whatever passes behind it.
+// Skills as lines of type in orbit around the glass. The glass bends whatever passes behind it.
 import * as THREE from 'three';
-import { setFont } from './doc.js';
+import { setFont, BLEND } from './doc.js';
 
 const VERT = 'varying vec2 vUv; void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}';
 const FRAG = /* glsl */`uniform sampler2D uMap; uniform vec3 uColor; uniform float uOpacity; varying vec2 vUv;
-void main(){ float a=texture2D(uMap,vUv).a; if(a<.04) discard; gl_FragColor=vec4(uColor*uOpacity*(gl_FrontFacing?1.:.16),a); }`;
+void main(){ float a=texture2D(uMap,vUv).a; if(a<.02) discard; gl_FragColor=vec4(uColor*(gl_FrontFacing?1.:.17),a*uOpacity); }`;
 
 function ringTexture(words, font, outline, maxW) {
   const H = 200, cv = document.createElement('canvas'), c = cv.getContext('2d'); setFont(c, font);
@@ -28,14 +28,14 @@ export class Rings {
     this.group.rotation.set(.17, 0, -.11);
     specs.forEach((sp, i) => {
       const { t, aspect } = ringTexture(groups[i], sp.font, sp.outline, maxW), h = 2 * Math.PI * R / aspect;
-      const u = { uMap: { value: t }, uColor: { value: new THREE.Color('#F1EEFF') }, uOpacity: { value: 1 } };
-      const m = new THREE.Mesh(new THREE.CylinderGeometry(R, R, h, 160, 1, true), new THREE.ShaderMaterial({ uniforms: u, vertexShader: VERT, fragmentShader: FRAG, side: THREE.DoubleSide, alphaToCoverage: true }));
-      m.position.y = (1 - i) * .66; m.rotation.y = i * 2.1; m.frustumCulled = false; this.group.add(m);
+      const u = { uMap: { value: t }, uColor: { value: new THREE.Color('#F2EFFF') }, uOpacity: { value: 1 } };
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(R, R, h, 128, 1, true), new THREE.ShaderMaterial({ uniforms: u, vertexShader: VERT, fragmentShader: FRAG, ...BLEND, depthWrite: true, side: THREE.DoubleSide }));
+      m.position.y = (1 - i) * .66; m.frustumCulled = false; this.group.add(m);
       this.rings.push({ m, sp, u, base: i * 2.1 });
     });
   }
-  update(time, dt, scrollVel) {
-    this.vel *= .94; this.spin += this.vel;
+  update(time, dt) {
+    this.vel *= Math.exp(-dt * 3.5); this.spin += this.vel * dt * 60;
     this.rings.forEach(({ m, sp, base }) => { m.rotation.y = base + time * sp.speed + this.spin * (sp.speed > 0 ? 1 : -1); });
   }
 }

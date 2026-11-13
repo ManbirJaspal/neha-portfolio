@@ -1,11 +1,8 @@
-// The WebGL stage: renderer, studio environment (rendered in Blender), aurora backdrop, post-processing.
+// The WebGL stage. One loop, one HDR render, a cheap post chain:
+//   backdrop (low-res) -> scene (HDR, no MSAA) -> bloom (quarter-res pyramid) -> tone map -> FXAA + grain
+// Internal resolution adapts to what the GPU can do so motion stays smooth.
 import * as THREE from 'three';
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
-import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
-import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 export const CAM_Z = 10, FOV = 30;
 const TAN = Math.tan(THREE.MathUtils.degToRad(FOV / 2));
@@ -24,112 +21,180 @@ float snoise(vec3 v){const vec2 C=vec2(1./6.,1./3.);const vec4 D=vec4(0.,.5,1.,2
   vec4 m=max(.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.);m=m*m;return 42.*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));}
 `;
 
-const BACKDROP_FRAG = /* glsl */`
-precision highp float; varying vec2 vUv; uniform float uTime,uAspect,uLift; uniform vec3 uA,uB,uC; uniform vec2 uMouse;
+const FS_VERT = 'varying vec2 vUv; void main(){vUv=uv;gl_Position=vec4(position.xy,0.,1.);}';
+
+// a dark studio: drifting haze in the chapter's colours, one key light with soft rays, a low horizon glow
+const BACKDROP = /* glsl */`
+precision highp float; varying vec2 vUv; uniform float uTime,uAspect,uLift,uRays; uniform vec3 uA,uB,uC; uniform vec2 uLight,uMouse;
 ${NOISE}
+float fbm(vec3 p){return snoise(p)*.55+snoise(p*2.03+7.1)*.28+snoise(p*4.1-3.7)*.17;}
 void main(){
-  vec2 p=(vUv-.5)*vec2(uAspect,1.);
-  float t=uTime*.035;
-  vec2 w=p+.35*vec2(snoise(vec3(p*.7,t)),snoise(vec3(p*.7+7.,t+3.)));
-  float n1=snoise(vec3(w*.55+vec2(.0,t*.7),t))*.5+.5;
-  float n2=snoise(vec3(w*.8+4.,t*1.3+9.))*.5+.5;
-  float n3=snoise(vec3(w*1.1-9.,t*.9+21.))*.5+.5;
-  vec3 col=vec3(.008,.007,.02);
-  col+=uA*pow(n1,2.6)*.4*smoothstep(1.25,.1,length(p-vec2(.55,.12)-uMouse*.08));
-  col+=uB*pow(n2,3.)*.26*smoothstep(1.3,.0,length(p-vec2(-.75,-.35)));
-  col+=uC*pow(n3,3.4)*.22*smoothstep(1.1,.0,length(p-vec2(.2,-.6)));
-  col*=uLift;
-  col*=smoothstep(1.35,.25,length(p*vec2(.8,1.)));
+  vec2 p=(vUv-.5)*vec2(uAspect,1.); float t=uTime*.03;
+  vec2 w=p+.3*vec2(fbm(vec3(p*.6,t)),fbm(vec3(p*.6+5.,t+2.)));
+  float h1=fbm(vec3(w*.55+vec2(0.,t),t*.8))*.5+.5, h2=fbm(vec3(w*.75+3.,t*1.2+9.))*.5+.5, h3=fbm(vec3(w*1.3-9.,t+21.))*.5+.5;
+  vec3 col=vec3(.004,.004,.011);
+  col+=uA*pow(h1,2.6)*.23*smoothstep(1.35,.05,length(p-vec2(.5,.1)-uMouse*.06));
+  col+=uB*pow(h2,3.)*.2*smoothstep(1.3,0.,length(p-vec2(-.75,-.3)));
+  col+=uC*pow(h3,3.4)*.13*smoothstep(1.05,0.,length(p-vec2(.15,-.62)));
+  // key light and rays
+  vec2 lp=uLight*vec2(uAspect,1.); vec2 d=p-lp; float r=length(d), ang=atan(d.y,d.x);
+  float ray=pow(snoise(vec3(ang*5.,t*1.6,1.))*.5+.5,2.6)*.6+pow(snoise(vec3(ang*13.,t*2.4,4.))*.5+.5,3.)*.4;
+  vec3 lc=mix(uA,vec3(1.,.96,.9),.55);
+  col+=lc*(.2*exp(-r*r*7.)+.045*exp(-r*2.2))*(.75+.25*h1);
+  col+=lc*ray*uRays*.06*exp(-r*1.5)*smoothstep(.04,.5,r);
+  // horizon glow
+  col+=mix(uB,uC,.5)*.07*exp(-pow((vUv.y-.02)*4.6,2.))*(.6+.4*h2);
+  col*=uLift*smoothstep(1.5,.2,length(p*vec2(.78,1.)));
   gl_FragColor=vec4(col,1.);
 }`;
 
-const FINAL = {
-  uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uCA: { value: 1 }, uGrain: { value: .04 } },
-  vertexShader: 'varying vec2 vUv; void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
-  fragmentShader: /* glsl */`
-    uniform sampler2D tDiffuse; uniform float uTime,uCA,uGrain; varying vec2 vUv;
-    float hash(vec2 p){vec3 p3=fract(vec3(p.xyx)*.1031);p3+=dot(p3,p3.yzx+33.33);return fract((p3.x+p3.y)*p3.z);}
-    void main(){
-      vec2 c=vUv-.5; float d=dot(c,c);
-      vec2 off=c*d*.006*uCA;
-      vec3 col=vec3(texture2D(tDiffuse,vUv+off).r,texture2D(tDiffuse,vUv).g,texture2D(tDiffuse,vUv-off).b);
-      col*=mix(1.,.62,smoothstep(.12,.62,d));
-      float g=hash(gl_FragCoord.xy+floor(uTime*24.)*17.13)-.5;
-      col+=g*uGrain*(1.-.5*dot(col,vec3(.33)));
-      gl_FragColor=vec4(col,1.);
-    }`,
-};
+const BRIGHT = /* glsl */`precision highp float; varying vec2 vUv; uniform sampler2D tMap; uniform vec2 uTexel; uniform float uThreshold;
+void main(){ vec3 c=(texture2D(tMap,vUv+uTexel*vec2(-1.,-1.)).rgb+texture2D(tMap,vUv+uTexel*vec2(1.,-1.)).rgb+texture2D(tMap,vUv+uTexel*vec2(-1.,1.)).rgb+texture2D(tMap,vUv+uTexel*vec2(1.,1.)).rgb)*.25;
+  float l=max(c.r,max(c.g,c.b)); float k=smoothstep(uThreshold,uThreshold+.9,l); gl_FragColor=vec4(min(c,vec3(12.))*k,1.); }`;
+const DOWN = /* glsl */`precision highp float; varying vec2 vUv; uniform sampler2D tMap; uniform vec2 uTexel;
+void main(){ vec3 c=texture2D(tMap,vUv).rgb*4.; c+=texture2D(tMap,vUv+uTexel*vec2(-1.,-1.)).rgb+texture2D(tMap,vUv+uTexel*vec2(1.,-1.)).rgb+texture2D(tMap,vUv+uTexel*vec2(-1.,1.)).rgb+texture2D(tMap,vUv+uTexel*vec2(1.,1.)).rgb; gl_FragColor=vec4(c/8.,1.); }`;
+const UP = /* glsl */`precision highp float; varying vec2 vUv; uniform sampler2D tMap; uniform vec2 uTexel; uniform float uGain;
+void main(){ vec3 c=texture2D(tMap,vUv+uTexel*vec2(-2.,0.)).rgb+texture2D(tMap,vUv+uTexel*vec2(2.,0.)).rgb+texture2D(tMap,vUv+uTexel*vec2(0.,-2.)).rgb+texture2D(tMap,vUv+uTexel*vec2(0.,2.)).rgb;
+  c+=2.*(texture2D(tMap,vUv+uTexel*vec2(-1.,1.)).rgb+texture2D(tMap,vUv+uTexel*vec2(1.,1.)).rgb+texture2D(tMap,vUv+uTexel*vec2(-1.,-1.)).rgb+texture2D(tMap,vUv+uTexel*vec2(1.,-1.)).rgb); gl_FragColor=vec4(c/12.*uGain,1.); }`;
+const COMPOSITE = /* glsl */`precision highp float; varying vec2 vUv; uniform sampler2D tScene,tBloom; uniform float uBloom,uCA,uExposure;
+vec3 neutral(vec3 c){ float x=min(c.r,min(c.g,c.b)); float o=x<.08?x-6.25*x*x:.04; c-=o; float pk=max(c.r,max(c.g,c.b)); if(pk<.76) return c;
+  float d=.24; float np=1.-d*d/(pk+d-.76); c*=np/pk; float g=1.-1./(.15*(pk-np)+1.); return mix(c,vec3(np),g); }
+void main(){
+  vec2 c=vUv-.5; float d=dot(c,c); vec2 off=c*d*.007*uCA;
+  vec3 col=vec3(texture2D(tScene,vUv+off).r,texture2D(tScene,vUv).g,texture2D(tScene,vUv-off).b);
+  col+=texture2D(tBloom,vUv).rgb*uBloom;
+  col*=uExposure*mix(1.,.6,smoothstep(.1,.62,d));
+  col=neutral(col); col=pow(clamp(col,0.,1.),vec3(1./2.2));
+  gl_FragColor=vec4(col,dot(col,vec3(.299,.587,.114)));
+}`;
+const FXAA = /* glsl */`precision highp float; varying vec2 vUv; uniform sampler2D tMap; uniform vec2 uTexel; uniform float uTime,uGrain;
+float hash(vec2 p){vec3 p3=fract(vec3(p.xyx)*.1031);p3+=dot(p3,p3.yzx+33.33);return fract((p3.x+p3.y)*p3.z);}
+void main(){
+  vec4 m=texture2D(tMap,vUv); float lM=m.a;
+  float lNW=texture2D(tMap,vUv+uTexel*vec2(-1.,-1.)).a, lNE=texture2D(tMap,vUv+uTexel*vec2(1.,-1.)).a, lSW=texture2D(tMap,vUv+uTexel*vec2(-1.,1.)).a, lSE=texture2D(tMap,vUv+uTexel*vec2(1.,1.)).a;
+  float lMin=min(lM,min(min(lNW,lNE),min(lSW,lSE))), lMax=max(lM,max(max(lNW,lNE),max(lSW,lSE)));
+  vec3 col=m.rgb;
+  if(lMax-lMin>max(.03,lMax*.11)){
+    vec2 dir=vec2(-((lNW+lNE)-(lSW+lSE)),((lNW+lSW)-(lNE+lSE)));
+    float rd=1./(min(abs(dir.x),abs(dir.y))+max((lNW+lNE+lSW+lSE)*.03125,.0078125));
+    dir=clamp(dir*rd,-8.,8.)*uTexel;
+    vec3 a=.5*(texture2D(tMap,vUv+dir*(1./3.-.5)).rgb+texture2D(tMap,vUv+dir*(2./3.-.5)).rgb);
+    vec4 b4=.5*vec4(a,0.)+.25*(texture2D(tMap,vUv+dir*-.5)+texture2D(tMap,vUv+dir*.5));
+    float lb=dot(b4.rgb,vec3(.299,.587,.114));
+    col=(lb<lMin||lb>lMax)?a:b4.rgb;
+  }
+  float g=hash(gl_FragCoord.xy+floor(uTime*24.)*17.13)-.5; col+=g*uGrain*(1.-.55*dot(col,vec3(.33)));
+  gl_FragColor=vec4(col,1.);
+}`;
 
 export function createStage(canvas, { onProgress } = {}) {
   let renderer;
-  try { renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: 'high-performance' }); } catch (e) { return null; }
+  try { renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, stencil: false, powerPreference: 'high-performance' }); } catch (e) { return null; }
   if (!renderer.capabilities.isWebGL2) return null;
-  const small = Math.min(innerWidth, innerHeight) < 700 || matchMedia('(pointer:coarse)').matches;
-  let dpr = Math.min(devicePixelRatio || 1, 1.5);
-  renderer.setPixelRatio(dpr);
-  renderer.toneMapping = THREE.NeutralToneMapping; renderer.toneMappingExposure = 1.0;
-  renderer.setClearColor(0x05040c, 1);
+  const gl = renderer.getContext(), small = Math.min(innerWidth, innerHeight) < 700 || matchMedia('(pointer:coarse)').matches;
+  renderer.toneMapping = THREE.NoToneMapping; renderer.setClearColor(0x020206, 1);
+  renderer.transmissionResolutionScale = .5;
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(FOV, 1, .1, 60); camera.position.set(0, 0, CAM_Z);
-  const world = new THREE.Group(); scene.add(world);           // 3D objects that take the pointer parallax
-  const flat = new THREE.Group(); scene.add(flat);             // DOM-synced text and images, no parallax
+  const world = new THREE.Group(); scene.add(world);      // 3D objects: take pointer parallax
+  const flat = new THREE.Group(); scene.add(flat);        // DOM-synced type and images: stay locked to the page
 
-  // backdrop
-  const bU = { uTime: { value: 0 }, uAspect: { value: 1 }, uLift: { value: 0 }, uMouse: { value: new THREE.Vector2() },
-    uA: { value: new THREE.Color('#5B4BFF') }, uB: { value: new THREE.Color('#1F4BFF') }, uC: { value: new THREE.Color('#B03CFF') } };
-  const backdrop = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.ShaderMaterial({ uniforms: bU, fragmentShader: BACKDROP_FRAG, depthWrite: false,
-    vertexShader: 'varying vec2 vUv; void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}' }));
-  backdrop.position.z = -9; backdrop.renderOrder = -10; scene.add(backdrop);
+  // fullscreen helper
+  const fsScene = new THREE.Scene(), fsCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), fsTri = new THREE.Mesh(new THREE.PlaneGeometry(2, 2)); fsTri.frustumCulled = false; fsScene.add(fsTri);
+  const mk = (frag, uniforms, extra = {}) => new THREE.ShaderMaterial({ vertexShader: FS_VERT, fragmentShader: frag, uniforms, depthTest: false, depthWrite: false, ...extra });
+  const pass = (mat, target) => { fsTri.material = mat; renderer.setRenderTarget(target); renderer.render(fsScene, fsCam); };
 
-  // environment
-  const loading = new THREE.LoadingManager(); let total = 1, done = 0;
-  loading.onProgress = (u, l, t) => { done = l; total = t; onProgress && onProgress(l / t); };
+  // backdrop rendered small, shown large
+  const half = { type: THREE.HalfFloatType, depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter };
+  const bgRT = new THREE.WebGLRenderTarget(384, 216, half);
+  const bU = { uTime: { value: 0 }, uAspect: { value: 1 }, uLift: { value: 0 }, uRays: { value: 1 }, uMouse: { value: new THREE.Vector2() }, uLight: { value: new THREE.Vector2(.3, .34) },
+    uA: { value: new THREE.Color('#5B4BFF') }, uB: { value: new THREE.Color('#1B3BFF') }, uC: { value: new THREE.Color('#FF6A4D') } };
+  const bgMat = mk(BACKDROP, bU);
+  const backdrop = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: bgRT.texture, depthWrite: false, toneMapped: false }));
+  backdrop.position.z = -9; backdrop.renderOrder = -10; backdrop.frustumCulled = false; scene.add(backdrop);
+
+  // environment (rendered in Blender)
+  const loading = new THREE.LoadingManager();
+  loading.onProgress = (u, l, t) => onProgress && onProgress(l / t);
   new HDRLoader(loading).load('assets/studio.hdr', tex => { tex.mapping = THREE.EquirectangularReflectionMapping; scene.environment = tex; });
-  scene.environmentIntensity = 1.0;
 
-  // post
-  const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 });
-  const composer = new EffectComposer(renderer, rt);
-  composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), .42, .85, 1.0); composer.addPass(bloom);
-  const fin = new ShaderPass(FINAL); composer.addPass(fin);
-  composer.addPass(new OutputPass());
+  // render targets
+  const mainRT = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, depthBuffer: true, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter });
+  const ldrRT = new THREE.WebGLRenderTarget(4, 4, { depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter });
+  const bl = [0, 1, 2, 3].map(() => new THREE.WebGLRenderTarget(4, 4, half));
+  const mBright = mk(BRIGHT, { tMap: { value: mainRT.texture }, uTexel: { value: new THREE.Vector2() }, uThreshold: { value: 1.0 } });
+  const mDown = mk(DOWN, { tMap: { value: null }, uTexel: { value: new THREE.Vector2() } });
+  const mUp = mk(UP, { tMap: { value: null }, uTexel: { value: new THREE.Vector2() }, uGain: { value: 1 } }, { blending: THREE.AdditiveBlending, transparent: true });
+  const mComp = mk(COMPOSITE, { tScene: { value: mainRT.texture }, tBloom: { value: bl[0].texture }, uBloom: { value: .5 }, uCA: { value: 1 }, uExposure: { value: 1 } });
+  const mFxaa = mk(FXAA, { tMap: { value: ldrRT.texture }, uTexel: { value: new THREE.Vector2() }, uTime: { value: 0 }, uGrain: { value: .036 } });
 
-  const size = { w: 1, h: 1, vw: 1, vh: 1, unit: 1 };
+  const size = { w: 1, h: 1, vw: 1, vh: 1, unit: 1, pr: 1, scale: 1, narrow: false };
+  const PR = Math.min(devicePixelRatio || 1, 1.5), BUDGET = small ? 1.15e6 : 2.3e6;
+  let scale = 1, lastW = 0;
+  const cap = () => Math.min(1, Math.sqrt(BUDGET / (size.w * size.h * PR * PR)));
+  function applyScale() {
+    const W = Math.max(2, Math.round(size.w * PR * scale)), H = Math.max(2, Math.round(size.h * PR * scale));
+    mainRT.setSize(W, H); ldrRT.setSize(W, H); bl.forEach((r, i) => r.setSize(Math.max(2, W >> (i + 2)), Math.max(2, H >> (i + 2))));
+    mBright.uniforms.uTexel.value.set(1 / W, 1 / H); mFxaa.uniforms.uTexel.value.set(1 / W, 1 / H); size.scale = scale; size.rw = W; size.rh = H;
+  }
   function resize() {
-    const w = innerWidth, h = innerHeight; size.w = w; size.h = h;
-    renderer.setPixelRatio(dpr); renderer.setSize(w, h, false); composer.setPixelRatio(dpr); composer.setSize(w, h);
+    const w = canvas.clientWidth || innerWidth, h = canvas.clientHeight || innerHeight; size.w = w; size.h = h; size.narrow = w < 900; size.pr = PR;
+    renderer.setPixelRatio(PR); renderer.setSize(w, h, false);
     camera.aspect = w / h; camera.updateProjectionMatrix();
     size.vh = 2 * CAM_Z * TAN; size.vw = size.vh * camera.aspect; size.unit = THREE.MathUtils.clamp(size.vw / 9.5, .5, 1.08);
-    const bh = 2 * (CAM_Z + 9) * TAN * 1.1; backdrop.scale.set(bh * camera.aspect, bh, 1); bU.uAspect.value = camera.aspect;
+    const bh = 2 * (CAM_Z + 9) * TAN * 1.12; backdrop.scale.set(bh * camera.aspect, bh, 1); bU.uAspect.value = camera.aspect;
+    if (w !== lastW) { scale = cap(); lastW = w; }
+    applyScale();
   }
-  resize(); addEventListener('resize', resize);
+  resize();
+  const listeners = []; let rzT = 0;
+  addEventListener('resize', () => { clearTimeout(rzT); rzT = setTimeout(() => { const w0 = size.w; resize(); listeners.forEach(f => f(size.w !== w0)); }, 120); });
 
-  const pointer = { x: 0, y: 0, sx: 0, sy: 0, moved: -1e9 };
-  addEventListener('pointermove', e => { if (e.pointerType === 'touch') return; pointer.x = e.clientX / innerWidth * 2 - 1; pointer.y = -(e.clientY / innerHeight * 2 - 1); pointer.moved = performance.now(); }, { passive: true });
+  // pointer (on touch screens the scene sways gently by itself)
+  const pointer = { x: 0, y: 0, sx: 0, sy: 0, touch: matchMedia('(pointer:coarse)').matches };
+  addEventListener('pointermove', e => { if (e.pointerType === 'touch') return; pointer.touch = false; pointer.x = e.clientX / innerWidth * 2 - 1; pointer.y = -(e.clientY / innerHeight * 2 - 1); }, { passive: true });
 
-  const updaters = []; let frames = 0, running = true, last = performance.now(), time = 0, slow = 0;
-  function frame(now) {
-    requestAnimationFrame(frame);
-    const dt = Math.min(.05, (now - last) / 1000); last = now;
+  // GPU timing where the browser allows it; used to pick a resolution the machine can hold
+  const tq = gl.getExtension('EXT_disjoint_timer_query_webgl2'); let query = null, pending = null, gpuMs = 0, hot = 0, cool = 0, dtAvg = 16, dtVar = 0;
+  const updaters = []; let running = true, time = 0, frames = 0;
+  function frame(dt) {
     if (!running || document.hidden) return;
-    time += dt;
-    pointer.sx += (pointer.x - pointer.sx) * .06; pointer.sy += (pointer.y - pointer.sy) * .06;
-    world.rotation.y = pointer.sx * .035; world.rotation.x = -pointer.sy * .022;
-    bU.uTime.value = time; bU.uMouse.value.set(pointer.sx, pointer.sy); fin.uniforms.uTime.value = time;
-    scene.environmentRotation.y = time * .02 + pointer.sx * .25;
+    dt = Math.min(.05, dt); time += dt; frames++;
+    if (pointer.touch) { pointer.x = Math.sin(time * .31) * .35; pointer.y = Math.cos(time * .23) * .25; }
+    const k = 1 - Math.exp(-dt * 4.2); pointer.sx += (pointer.x - pointer.sx) * k; pointer.sy += (pointer.y - pointer.sy) * k;
+    world.rotation.y = pointer.sx * .04; world.rotation.x = -pointer.sy * .024;
+    bU.uTime.value = time; bU.uMouse.value.set(pointer.sx, pointer.sy); mFxaa.uniforms.uTime.value = time;
+    scene.environmentRotation.y = time * .025 + pointer.sx * .3;
     for (const u of updaters) u(time, dt);
-    composer.render(dt); frames++;
-    // drop resolution once if this machine cannot keep up
-    if (dt > .045) { if (++slow > 90 && dpr > 1) { dpr = 1; bloom.enabled = false; resize(); slow = -1e9; } } else if (slow > 0) slow--;
+
+    if (tq && !pending) { query = gl.createQuery(); gl.beginQuery(tq.TIME_ELAPSED_EXT, query); }
+    pass(bgMat, bgRT);
+    renderer.setRenderTarget(mainRT); renderer.render(scene, camera);
+    pass(mBright, bl[0]);
+    for (let i = 1; i < 4; i++) { mDown.uniforms.tMap.value = bl[i - 1].texture; mDown.uniforms.uTexel.value.set(1 / bl[i - 1].width, 1 / bl[i - 1].height); pass(mDown, bl[i]); }
+    renderer.autoClear = false;
+    for (let i = 3; i > 0; i--) { mUp.uniforms.tMap.value = bl[i].texture; mUp.uniforms.uTexel.value.set(1 / bl[i].width, 1 / bl[i].height); pass(mUp, bl[i - 1]); }
+    renderer.autoClear = true;
+    pass(mComp, ldrRT); pass(mFxaa, null);
+    if (query) { gl.endQuery(tq.TIME_ELAPSED_EXT); pending = query; query = null; }
+    else if (pending && gl.getQueryParameter(pending, gl.QUERY_RESULT_AVAILABLE)) {
+      if (!gl.getParameter(tq.GPU_DISJOINT_EXT)) { const ms = gl.getQueryParameter(pending, gl.QUERY_RESULT) / 1e6; gpuMs = gpuMs ? gpuMs * .88 + ms * .12 : ms; }
+      gl.deleteQuery(pending); pending = null;
+    }
+    // adapt: prefer real GPU time; otherwise infer from frame pacing (ignoring a steady browser cap such as 30 fps power saving)
+    const ms = dt * 1000; dtVar = dtVar * .95 + Math.abs(ms - dtAvg) * .05; dtAvg = dtAvg * .95 + ms * .05;
+    const timed = tq && gpuMs > 0, over = timed ? gpuMs > 7.5 : (dtAvg > 21 && dtVar > 2.5), under = timed ? gpuMs < 3.6 : dtAvg < 12;
+    hot = over ? hot + 1 : 0; cool = under ? cool + 1 : 0;
+    if (hot > 40 && scale > .56) { scale = Math.max(.55, scale * .86); applyScale(); hot = 0; gpuMs *= .76; }
+    else if (cool > 240 && scale < cap() - .01) { scale = Math.min(cap(), scale * 1.1); applyScale(); cool = 0; }
   }
-  requestAnimationFrame(frame);
 
-  // world size of one CSS pixel at depth z, and DOM rect -> world position
-  const k = z => 2 * (CAM_Z - z) * TAN / size.h;
-  const place = (rect, z, out) => { const s = k(z); out.x = (rect.left + rect.width / 2 - size.w / 2) * s; out.y = -(rect.top + rect.height / 2 - size.h / 2) * s; out.z = z; return s; };
+  const kz = z => 2 * (CAM_Z - z) * TAN / size.h;
+  // rect in viewport CSS pixels -> world position at depth z; returns world units per CSS pixel
+  const place = (r, z, out) => { const s = kz(z); out.x = (r.left + r.width / 2 - size.w / 2) * s; out.y = -(r.top + r.height / 2 - size.h / 2) * s; out.z = z; return s; };
 
-  return { THREE, renderer, scene, camera, world, flat, size, pointer, loading, backdrop: bU, bloom, fin, k, place, small,
-    onFrame: f => updaters.push(f), setRunning: v => { running = v; }, get time() { return time; }, get frames() { return frames; } };
+  return { THREE, renderer, scene, camera, world, flat, size, pointer, loading, backdrop: bU, post: { comp: mComp.uniforms, fxaa: mFxaa.uniforms, bright: mBright.uniforms }, kz, place, small, frame,
+    onFrame: f => updaters.push(f), onResize: f => listeners.push(f), setRunning: v => { running = v; },
+    get time() { return time; }, get frames() { return frames; }, get gpuMs() { return gpuMs; }, get scale() { return scale; } };
 }
