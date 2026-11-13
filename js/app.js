@@ -91,7 +91,7 @@ if (stage) {
     if (S.view !== 'home') return;
     const vh = stage.size.h, unit = stage.size.unit, narrow = stage.size.w < 900, ptr = stage.pointer;
     const velN = lenis ? clamp(lenis.velocity / 55, -1, 1) : 0;
-    texts.forEach(t => t.update()); imgs.forEach(g => g.update(time, velN * .5));
+    texts.forEach(t => t.update(velN)); imgs.forEach(g => g.update(time, velN * .5));
     S.agit += (Math.min(1, Math.hypot(ptr.x - lpx, ptr.y - lpy) * 14) - S.agit) * .05; lpx = ptr.x; lpy = ptr.y;
     stage.backdrop.uLift.value = S.intro;
     if (T.hero) T.hero.u.uOpacity.value = S.intro;

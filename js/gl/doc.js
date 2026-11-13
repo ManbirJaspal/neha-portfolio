@@ -27,7 +27,9 @@ export class GLText {
     this.canvas = document.createElement('canvas'); this.tex = new THREE.CanvasTexture(this.canvas);
     this.tex.colorSpace = THREE.SRGBColorSpace; this.tex.anisotropy = 4; this.tex.generateMipmaps = true;
     this.u = { uMap: { value: this.tex }, uColor: { value: new THREE.Color(color) }, uOpacity: { value: 1 }, uProg: { value: 2 }, uLines: { value: lines || 1 }, uDim: { value: lines ? .16 : 1 } };
-    this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.ShaderMaterial({ uniforms: this.u, vertexShader: VERT, alphaToCoverage: true, fragmentShader: /* glsl */`
+    this.u.uVel = { value: 0 };
+    this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1, 8, 4), new THREE.ShaderMaterial({ uniforms: this.u, alphaToCoverage: true,
+      vertexShader: 'varying vec2 vUv; uniform float uVel; void main(){vUv=uv; vec3 p=position; p.x+=p.y*uVel*.22; gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.);}', fragmentShader: /* glsl */`
       uniform sampler2D uMap; uniform vec3 uColor; uniform float uOpacity,uProg,uLines,uDim; varying vec2 vUv;
       void main(){ float a=texture2D(uMap,vUv).a; if(a<.03) discard;
         float order=(1.-vUv.y)*(1.-1./uLines)+vUv.x/uLines;
@@ -51,7 +53,8 @@ export class GLText {
     }
     this.tex.needsUpdate = true; this.w = r.width; this.h = r.height;
   }
-  update() {
+  update(vel = 0) {
+    this.u.uVel.value += (vel - this.u.uVel.value) * .1;
     const r = this.el.getBoundingClientRect(), st = this.stage;
     const vis = r.bottom > -80 && r.top < st.size.h + 80 && r.width > 2; this.mesh.visible = vis && this.u.uOpacity.value > .003; if (!vis) return;
     const s = st.place(r, this.z, this.pos); this.mesh.position.copy(this.pos);
